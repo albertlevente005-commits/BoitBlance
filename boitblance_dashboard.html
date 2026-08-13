@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BoitBlance Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.4/dist/ethers.umd.min.js"></script>
+<style>
+  :root{--bg:#0d1117;--panel:#161b22;--panel2:#1c232d;--border:#2d3540;--text:#e6edf3;--muted:#8b949e;--accent:#2ea88a;--accent2:#3fb950;--warn:#d29922;--err:#f85149;--link:#58a6ff}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.5;padding:24px}
+  .wrap{max-width:900px;margin:0 auto}
+  header{display:flex;align-items:center;gap:12px;margin-bottom:2px}
+  header .dot{width:10px;height:10px;border-radius:50%;background:var(--accent2);box-shadow:0 0 10px var(--accent2)}
+  h1{font-size:22px;margin:0}
+  .sub{color:var(--muted);font-size:13px;margin:0 0 22px 22px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:18px}
+  .card h2{font-size:15px;margin:0 0 6px;display:flex;align-items:center;gap:8px}
+  .card .desc{color:var(--muted);font-size:12px;margin:0 0 14px}
+  .badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:var(--panel2);color:var(--muted);border:1px solid var(--border)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  label{display:block;font-size:12px;color:var(--muted);margin-bottom:4px}
+  input{background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;padding:9px 11px;font-size:14px;min-width:160px;flex:1;font-family:inherit}
+  input:focus{outline:none;border-color:var(--accent)}
+  button{background:var(--accent);color:#06120e;border:none;border-radius:8px;padding:9px 18px;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap}
+  button:hover{background:var(--accent2)}
+  .result{margin-top:14px;font-size:14px}
+  .kv{display:grid;grid-template-columns:150px 1fr;gap:6px 14px;padding:10px 0;border-top:1px solid var(--border)}
+  .kv .k{color:var(--muted)}
+  .kv .v{word-break:break-all;font-family:ui-monospace,Menlo,monospace;font-size:13px}
+  a{color:var(--link);text-decoration:none}a:hover{text-decoration:underline}
+  .stats{display:flex;gap:14px;flex-wrap:wrap}
+  .stat{flex:1;min-width:120px;background:var(--panel2);border:1px solid var(--border);border-radius:10px;padding:14px}
+  .stat .n{font-size:24px;font-weight:700}.stat .l{font-size:12px;color:var(--muted);margin-top:2px}
+  .usdc{color:var(--accent2)}
+  .big{font-size:26px;font-weight:700}
+  .err{color:var(--err);font-size:13px;margin-top:10px}
+  .muted{color:var(--muted)}
+  .status{display:inline-block;padding:3px 12px;border-radius:20px;font-weight:600;font-size:13px}
+  .ok{background:rgba(63,185,80,.15);color:var(--accent2)}
+  .pending{background:rgba(88,166,255,.15);color:var(--link)}
+  .bad{background:rgba(248,81,73,.15);color:var(--err)}
+  .bar{height:8px;background:var(--panel2);border-radius:6px;overflow:hidden;margin-top:8px}
+  .bar > div{height:100%;background:var(--accent)}
+  .spin{display:inline-block;width:13px;height:13px;border:2px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:r .7s linear infinite;vertical-align:-2px;margin-right:6px}
+  @keyframes r{to{transform:rotate(360deg)}}
+  footer{color:var(--muted);font-size:12px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><span class="dot"></span><h1>BoitBlance</h1></header>
+  <p class="sub">3 agentic primitív — kaució, stream-fizetés, vállalás — élőben az Arc Testnetről</p>
+
+  <!-- ÁTTEKINTÉS -->
+  <div class="card">
+    <h2>📊 A stack <span class="badge">élő számok</span></h2>
+    <p class="desc">A te telepített szerződéseid az Arc Testneten.</p>
+    <div class="result" id="overview"><span class="spin"></span><span class="muted">Betöltés...</span></div>
+  </div>
+
+  <!-- AGENTBOND -->
+  <div class="card">
+    <h2>🛡️ AgentBond <span class="badge">kaució / credit score</span></h2>
+    <p class="desc">Az ügynök letett kauciója. A szabad kaució a nyilvános „credit score".</p>
+    <div class="row">
+      <div style="flex:1"><label>Ügynök tárcacíme</label><input id="agentAddr" value="0xf195bf8b147a4c5c94f3dedf147a5f283fddf50a"></div>
+      <button id="bondBtn">Lekérdezés</button>
+    </div>
+    <div class="result" id="bondResult"></div>
+  </div>
+
+  <!-- STREAMPAY -->
+  <div class="card">
+    <h2>💧 StreamPay <span class="badge">másodpercenkénti fizetés</span></h2>
+    <p class="desc">Egy folyamatos USDC-stream állapota.</p>
+    <div class="row">
+      <div style="flex:1"><label>Stream ID</label><input id="streamId" value="0"></div>
+      <button id="streamBtn">Lekérdezés</button>
+    </div>
+    <div class="result" id="streamResult"></div>
+  </div>
+
+  <!-- COMMITSTAKE -->
+  <div class="card">
+    <h2>🤝 CommitStake <span class="badge">vállalás zálogban</span></h2>
+    <p class="desc">Egy vállalás (stake) állapota és az ellenőr.</p>
+    <div class="row">
+      <div style="flex:1"><label>Commitment ID</label><input id="commitId" value="0"></div>
+      <button id="commitBtn">Lekérdezés</button>
+    </div>
+    <div class="result" id="commitResult"></div>
+  </div>
+
+  <footer>Adatforrás: rpc.testnet.arc.network · Felfedező: testnet.arcscan.app</footer>
+</div>
+
+<script>
+const RPC = "https://rpc.testnet.arc.network";
+const EXPLORER = "https://testnet.arcscan.app";
+// A te telepitett szerzodeseid (cimek.json):
+const ADDR = {
+  AgentBond:   "0xb92e9e0737e585a5032ce64a43a118f6bd8e15e0",
+  StreamPay:   "0xe2d81453ff4d870375566bd5e29f174661b1e5f6",
+  CommitStake: "0xd42f3deb8906b54c75b85c3cb9e05457fb574a0b",
+  USDC:        "0x3600000000000000000000000000000000000000"
+};
+const STATUS_OBL = ["aktív","felszabadítva","slashelve"];
+const STATUS_COM = ["nyitott","teljesítve","slashelve"];
+
+const provider = new ethers.JsonRpcProvider(RPC);
+const bondAbi = [
+  "function bonded(address) view returns (uint256)",
+  "function locked(address) view returns (uint256)",
+  "function freeBond(address) view returns (uint256)",
+  "function obligationCount() view returns (uint256)"
+];
+const streamAbi = [
+  "function streams(uint256) view returns (address sender, address recipient, uint256 deposit, uint256 startTime, uint256 stopTime, uint256 withdrawn, bool active)",
+  "function recipientBalance(uint256) view returns (uint256)",
+  "function vestedAmount(uint256) view returns (uint256)",
+  "function streamCount() view returns (uint256)"
+];
+const commitAbi = [
+  "function commitments(uint256) view returns (address staker, address verifier, address beneficiary, uint256 amount, uint256 deadline, uint8 status, string goal)",
+  "function commitmentCount() view returns (uint256)"
+];
+
+const bond = new ethers.Contract(ADDR.AgentBond, bondAbi, provider);
+const stream = new ethers.Contract(ADDR.StreamPay, streamAbi, provider);
+const commit = new ethers.Contract(ADDR.CommitStake, commitAbi, provider);
+
+const $ = id => document.getElementById(id);
+const usd = v => (Number(v)/1e6).toFixed(2)+" USDC";
+const loading = el => { el.innerHTML = '<span class="spin"></span><span class="muted">Lekérdezés...</span>'; };
+const errBox = (el,m) => { el.innerHTML = '<div class="err">⚠ '+m+'</div>'; };
+const txt = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;');
+const link = a => `<a href="${EXPLORER}/address/${a}" target="_blank">${a}</a>`;
+
+async function loadOverview(){
+  const el = $("overview");
+  try{
+    const [obl, str, com] = await Promise.all([
+      bond.obligationCount(), stream.streamCount(), commit.commitmentCount()
+    ]);
+    el.innerHTML = `
+      <div class="stats">
+        <div class="stat"><div class="n">${obl}</div><div class="l">obligation</div></div>
+        <div class="stat"><div class="n">${str}</div><div class="l">stream</div></div>
+        <div class="stat"><div class="n">${com}</div><div class="l">vállalás</div></div>
+      </div>
+      <div class="kv"><div class="k">AgentBond</div><div class="v">${link(ADDR.AgentBond)}</div></div>
+      <div class="kv"><div class="k">StreamPay</div><div class="v">${link(ADDR.StreamPay)}</div></div>
+      <div class="kv"><div class="k">CommitStake</div><div class="v">${link(ADDR.CommitStake)}</div></div>`;
+  }catch(e){ errBox(el, "Nem érhető el a lánc. ("+(e.shortMessage||e.message)+")"); }
+}
+
+async function loadBond(){
+  const el = $("bondResult"); const a = $("agentAddr").value.trim();
+  if(!ethers.isAddress(a)){ errBox(el,"Érvénytelen cím."); return; }
+  loading(el);
+  try{
+    const [b, l, f] = await Promise.all([bond.bonded(a), bond.locked(a), bond.freeBond(a)]);
+    el.innerHTML = `
+      <div class="kv" style="border-top:none"><div class="k">Szabad kaució (credit score)</div>
+        <div class="v"><span class="big usdc">${usd(f)}</span></div></div>
+      <div class="kv"><div class="k">Teljes kaució</div><div class="v">${usd(b)}</div></div>
+      <div class="kv"><div class="k">Lekötve (obligation)</div><div class="v">${usd(l)}</div></div>`;
+  }catch(e){ errBox(el, e.shortMessage||e.message); }
+}
+
+async function loadStream(){
+  const el = $("streamResult"); const id = $("streamId").value.trim();
+  if(id===""){ errBox(el,"Adj meg egy stream ID-t."); return; }
+  loading(el);
+  try{
+    const s = await stream.streams(id);
+    const [vested, avail] = await Promise.all([stream.vestedAmount(id), stream.recipientBalance(id)]);
+    const pct = Number(s.deposit) ? Math.min(100, Number(vested)*100/Number(s.deposit)) : 0;
+    el.innerHTML = `
+      <div class="kv" style="border-top:none"><div class="k">Állapot</div>
+        <div class="v"><span class="status ${s.active?'ok':'bad'}">${s.active?'aktív':'lezárva'}</span></div></div>
+      <div class="kv"><div class="k">Fogadó (ügynök)</div><div class="v">${link(s.recipient)}</div></div>
+      <div class="kv"><div class="k">Küldő</div><div class="v">${link(s.sender)}</div></div>
+      <div class="kv"><div class="k">Teljes letét</div><div class="v">${usd(s.deposit)}</div></div>
+      <div class="kv"><div class="k">Eddig beérett</div><div class="v"><span class="usdc">${usd(vested)}</span> (${pct.toFixed(0)}%)
+        <div class="bar"><div style="width:${pct}%"></div></div></div></div>
+      <div class="kv"><div class="k">Most kivehető</div><div class="v">${usd(avail)}</div></div>
+      <div class="kv"><div class="k">Eddig kivéve</div><div class="v">${usd(s.withdrawn)}</div></div>`;
+  }catch(e){ errBox(el, "Nincs ilyen stream, vagy hiba. ("+(e.shortMessage||e.message)+")"); }
+}
+
+async function loadCommit(){
+  const el = $("commitResult"); const id = $("commitId").value.trim();
+  if(id===""){ errBox(el,"Adj meg egy commitment ID-t."); return; }
+  loading(el);
+  try{
+    const c = await commit.commitments(id);
+    const st = STATUS_COM[Number(c.status)] || ("#"+c.status);
+    const cls = Number(c.status)===1?'ok':(Number(c.status)===2?'bad':'pending');
+    const dl = new Date(Number(c.deadline)*1000).toLocaleString("hu-HU");
+    el.innerHTML = `
+      <div class="kv" style="border-top:none"><div class="k">Állapot</div>
+        <div class="v"><span class="status ${cls}">${st}</span></div></div>
+      <div class="kv"><div class="k">Cél</div><div class="v">${txt(c.goal)}</div></div>
+      <div class="kv"><div class="k">Tét</div><div class="v"><span class="usdc">${usd(c.amount)}</span></div></div>
+      <div class="kv"><div class="k">Stakelő (ügynök)</div><div class="v">${link(c.staker)}</div></div>
+      <div class="kv"><div class="k">Ellenőr</div><div class="v">${link(c.verifier)}</div></div>
+      <div class="kv"><div class="k">Kedvezményezett</div><div class="v">${link(c.beneficiary)}</div></div>
+      <div class="kv"><div class="k">Határidő</div><div class="v">${dl}</div></div>`;
+  }catch(e){ errBox(el, "Nincs ilyen vállalás, vagy hiba. ("+(e.shortMessage||e.message)+")"); }
+}
+
+$("bondBtn").onclick = loadBond;
+$("streamBtn").onclick = loadStream;
+$("commitBtn").onclick = loadCommit;
+[["agentAddr",loadBond],["streamId",loadStream],["commitId",loadCommit]].forEach(([id,fn])=>{
+  $(id).addEventListener("keydown",e=>{ if(e.key==="Enter") fn(); });
+});
+window.addEventListener("load", ()=>{ loadOverview(); loadBond(); });
+</script>
+</body>
+</html>
